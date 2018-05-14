@@ -1,0 +1,76 @@
+{
+  "src_folders" : ["tests"],
+  "output_folder" : "reports",
+  "custom_commands_path" : [],
+  "custom_assertions_path" : [],
+  "page_objects_path" : "",
+  "globals_path" : "",
+
+  "selenium" : {
+    "start_process" : false,
+    "server_path" : "",
+    "log_path" : "",
+    "port" : "4444",
+    "cli_args" : {
+      "webdriver.chrome.driver" : "",
+      "webdriver.gecko.driver" : "",
+      "webdriver.edge.driver" : ""
+    }
+  },
+
+  "test_settings" : {
+    "default" : {
+      "launch_url" : "",
+      "selenium_port"  : "4444",
+      "selenium_host"  : "localhost",
+      "silent": true,
+      "screenshots" : {
+        "enabled" : true,
+        "path" : ""
+      },
+      "videos": {
+        "enabled": true,
+        "delete_on_success": false,
+        "path": "",
+        "format": "mp4",
+        "resolution": "1440x900",
+        "fps": 15,
+        "display": ":60",
+        "pixel_format": "yuv420p"
+      },
+      "desiredCapabilities": {
+        "browserName": "chrome",
+        "marionette": true
+      }
+    },
+
+    "chrome" : {
+      "desiredCapabilities": {
+        "loggingPrefs": {
+          "browser": "ALL"
+        },
+        "browserName": "chrome",
+        "chromeOptions": {
+          "args": [
+            "disable-user-media-security",
+            "use-fake-ui-for-media-stream",
+            "use-fake-device-for-media-stream",
+            "use-file-for-fake-video-capture=/vm-root/doNew3.y4m",
+            "use-file-for-fake-audio-capture=/vm-root/out_audio.mp4"
+          ]
+        }
+      }
+    },
+
+    "firefox": {
+      "desiredCapabilities": {
+        "browserName": "firefox",
+        "marionette": true,
+        "moz:firefoxOptions": {
+          "profile": "UEsDBBQAAAAIAAGEcEtLs+PXVgAAAHsAAAAHAAAAdXNlci5qc33LOwqAMAwA0F3oHUpdFCQX8BzOEmkqQfshaT2/ujk5vuH1dlESW4SCms507dH6anCRPCMkvHjHmgUKSWRVzgk8K24neTfZKo3G+TdqFcKoEPCgz7gBUEsBAj8AFAAAAAgAAYRwS0uz49dWAAAAewAAAAcAJAAAAAAAAAAgAAAAAAAAAHVzZXIuanMKACAAAAAAAAEAGABH7Vmq517TAd7kN3bnXtMB3uQ3dude0wFQSwUGAAAAAAEAAQBZAAAAewAAAAAA"
+        }
+      },
+      "webdriver.firefox.profile": "nightwatch"
+    }
+  }
+}
