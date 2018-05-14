@@ -256,7 +256,7 @@ func main() {
 			// //prepare the reader instances to encode
 			values := map[string]io.Reader{
 
-				"1": mustOpen("_twilioVideo24.webm"), // files
+				"1": mustOpen("_twilioVideo16.webm"), // files
 				"2": mustOpen("_remoteRec.webm"),
 			}
 
