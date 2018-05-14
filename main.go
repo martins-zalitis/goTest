@@ -225,7 +225,7 @@ func main() {
 			}
 			fmt.Println("Video file remoteRec.webm has been moved to project folder")
 
-			cmdTwilioFPS := exec.Command("ffmpeg", "-y", "-i", "_twilioVideo.webm", "-vf", "setpts=1.25*PTS", "-r", "24", "_twilioVideo24.webm")
+			cmdTwilioFPS := exec.Command("ffmpeg", "-y", "-i", "_twilioVideo.webm", "-vf", "setpts=1.25*PTS", "-r", "16", "_twilioVideo16.webm")
 
 			out, err := cmdTwilioFPS.CombinedOutput()
 			if err != nil {
