@@ -29,6 +29,18 @@ type MosResponse struct {
 	Blur          float32 `json:"Blur [0..10]"`
 	Blockiness    float32 `json:"Blockiness [0..10]"`
 	Mos           float32 `json:"PEVQ MOSPEVQ"`
+	Delay         int32   `json:"Avg. Delay [ms]"`
+}
+type MosResponseAudio struct {
+	Time            string  `json:"time"`
+	OriginalFile    string  `json:"original file"`
+	DegradedFile    string  `json:"degraded file"`
+	SampleRate      uint16  `json:"Sample rate [Hz]"`
+	Delay           uint16  `json:"Avg. Delay [ms]"`
+	Loudness        float32 `json:"Attenuation [dB]"`
+	SpeechRatioRef  float32 `json:"Act. Speech Ratio. Ref."`
+	SpeechRatioTest float32 `json:"Act. Speech Ratio Test "`
+	Mos             float32 `json:"MOS-LQO POLQA"`
 }
 type TwilioResponseRecordings struct {
 	Recordings []Recording_info `json:"recordings"`
@@ -148,12 +160,15 @@ func main() {
 			fmt.Println(err)
 
 			mediaLink := string(' ')
+			mediaLinkAudio := string(' ')
 
 			if data1.Recordings[0].Type == "video" {
 				mediaLink = data1.Recordings[0].Links.Media
+				mediaLinkAudio = data1.Recordings[1].Links.Media
 			}
 			if data1.Recordings[1].Type == "video" {
 				mediaLink = data1.Recordings[1].Links.Media
+				mediaLinkAudio = data1.Recordings[0].Links.Media
 			}
 
 			// Close Twilio Room
@@ -185,7 +200,6 @@ func main() {
 				}
 				sCompl := string(bodyCompl[:])
 				fmt.Println(sCompl)
-
 			}
 
 			//WGET MEDIA from Twilio
@@ -205,7 +219,7 @@ func main() {
 				os.Exit(1)
 			}
 			fmt.Println("Video file downloaded from twilio as Media")
-			time.Sleep(5000 * time.Millisecond)
+			// time.Sleep(5000 * time.Millisecond)
 
 			cmdExt := "mv"
 			argsExt := []string{"Media", "_twilioVideo.webm"}
@@ -234,9 +248,48 @@ func main() {
 			}
 			fmt.Println("FFmpeg Change FPS for twilio recording")
 
-			// MOS SERVER reqest
+			// Get Audio file
 
-			fmt.Println("Starting MOS")
+			cmdWgetAudio := "wget"
+			argsWgetAudio := []string{
+				"--http-user=AC6049e75bedf8de65588b7d03840f66b2",
+				"--http-password=805816a47ba9551f42982f8ed8342a30",
+				mediaLinkAudio}
+
+			if err := exec.Command(cmdWgetAudio, argsWgetAudio...).Run(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			fmt.Println("Audio file downloaded from twilio as Media")
+
+			cmdExtAudio := "mv"
+			argsExtAudio := []string{"Media", "_twilioAudio.mka"}
+
+			if err := exec.Command(cmdExtAudio, argsExtAudio...).Run(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			fmt.Println("Audio file extensiton changed new file : twilioAudio.mka")
+
+			cmdAudioTwilioConvert := exec.Command("ffmpeg", "-i", "_twilioAudio.mka", "_twilioAudio.wav")
+			out, err = cmdAudioTwilioConvert.CombinedOutput()
+			if err != nil {
+				fmt.Printf("cmdAudioTwilioConvert failed with %s\n", err.Error())
+				fmt.Println(string(out))
+			}
+			fmt.Println("Converted _twilioAudio.mka video to _twilioAudio.wav")
+
+			cmdAudioRemote := exec.Command("ffmpeg", "-i", "_remoteRec.webm", "-vn", "-ar", "44100", "-ac", "2", "-ab", "192k", "-f", "wav", "_remoteRec.wav")
+			out, err = cmdAudioRemote.CombinedOutput()
+			if err != nil {
+				fmt.Printf("cmdAudioRemote failed with %s\n", err.Error())
+				fmt.Println(string(out))
+			}
+			fmt.Println("Converted Remote video to _remoteRec.wav")
+
+			// MOS SERVER reqest
+			// Video
+			fmt.Println("Starting MOS Video")
 
 			var client *http.Client
 			var remoteURL string
@@ -251,16 +304,39 @@ func main() {
 				defer ts.Close()
 				client = ts.Client()
 				remoteURL = "http://10.1.5.58:8080/MOS/UploadServlet2"
+
+			}
+			var remoteURLAudio string
+			{
+				ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					b, err := httputil.DumpRequest(r, true)
+					if err != nil {
+						panic(err)
+					}
+					fmt.Printf("%s", b)
+				}))
+				defer ts.Close()
+				client = ts.Client()
+				remoteURLAudio = "http://10.1.5.58:8080/MOS/UploadServlet"
 			}
 
 			// //prepare the reader instances to encode
 			values := map[string]io.Reader{
 
-				"1": mustOpen("_twilioVideo16.webm"), // files
-				"2": mustOpen("_remoteRec.webm"),
+				"1": mustOpen("_remoteRec.webm"),
+				"2": mustOpen("_twilioVideo16.webm"),
+			}
+			valuesAudio := map[string]io.Reader{
+				"1": mustOpen("_twilioAudio.wav"),
+				"2": mustOpen("_remoteRec.wav"),
 			}
 
 			err = Upload(client, remoteURL, values)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Starting MOS Audio")
+			err = UploadAudio(client, remoteURLAudio, valuesAudio)
 			if err != nil {
 				panic(err)
 			}
@@ -292,7 +368,6 @@ func Upload(client *http.Client, url string, values map[string]io.Reader) (err e
 		if _, err = io.Copy(fw, r); err != nil {
 			return err
 		}
-
 	}
 
 	w.Close()
@@ -326,8 +401,6 @@ func Upload(client *http.Client, url string, values map[string]io.Reader) (err e
 		// fmt.Println(res.Header)
 		res.Body.Read(bodyContent)
 		res.Body.Close()
-		// fmt.Println(bodyContent)
-
 		// fmt.Println(string(body[:]))
 
 		s := string(body[:])
@@ -335,11 +408,13 @@ func Upload(client *http.Client, url string, values map[string]io.Reader) (err e
 		s = strings.Replace(s, "\r", "", -1)
 		data := &MosResponse{}
 		err = json.Unmarshal([]byte(s), data)
-		fmt.Println(err)
+		// fmt.Println(err)
+		fmt.Printf("PEVQ MOS: ")
 		fmt.Println(data.Mos)
-		s2, _ := json.Marshal(data)
-		fmt.Println(string(s2))
-
+		fmt.Printf("PEVQ avg delay (ms): ")
+		fmt.Println(data.Delay)
+		// s2, _ := json.Marshal(data)
+		// fmt.Println(string(s2))
 	}
 	return
 }
@@ -350,4 +425,75 @@ func mustOpen(f string) *os.File {
 		panic(err)
 	}
 	return r
+}
+
+func UploadAudio(client *http.Client, url string, values map[string]io.Reader) (err error) {
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+	for key, r := range values {
+		var fw io.Writer
+		if x, ok := r.(io.Closer); ok {
+			defer x.Close()
+		}
+		if x, ok := r.(*os.File); ok {
+			if fw, err = w.CreateFormFile(key, x.Name()); err != nil {
+				return
+			}
+		} else {
+			if fw, err = w.CreateFormField(key); err != nil {
+				return
+			}
+		}
+		if _, err = io.Copy(fw, r); err != nil {
+			return err
+		}
+	}
+
+	w.Close()
+
+	req, err := http.NewRequest("POST", url, &b)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	res, err := client.Do(req)
+	if err != nil {
+		return
+	}
+
+	if res.StatusCode != http.StatusOK {
+		err = fmt.Errorf("bad status: %s", res.Status)
+	}
+
+	if res.StatusCode == http.StatusOK {
+
+		defer res.Body.Close()
+		body, err := ioutil.ReadAll(res.Body)
+
+		if nil != err {
+			fmt.Println("errorination happened reading the body", err)
+		}
+
+		var bodyContent []byte
+		// fmt.Println(res.StatusCode)
+		// fmt.Println(res.Header)
+		res.Body.Read(bodyContent)
+		res.Body.Close()
+		// fmt.Println(string(body[:]))
+		s := string(body[:])
+		s = strings.Replace(s, "\n", "", -1)
+		s = strings.Replace(s, "\r", "", -1)
+		data := &MosResponseAudio{}
+		err = json.Unmarshal([]byte(s), data)
+		// fmt.Println(err)
+		fmt.Printf("POLQA MOS: ")
+		fmt.Println(data.Mos)
+		fmt.Printf("POLQA avg delay (ms): ")
+		fmt.Println(data.Delay)
+		// s2, _ := json.Marshal(data)
+		// fmt.Println(string(s2))
+
+	}
+	return
 }
